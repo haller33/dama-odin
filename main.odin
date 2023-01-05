@@ -95,7 +95,10 @@ render_square :: proc (sqboard : ^Board) {
     LINES_LOOP: for i in 0..<LINES {
 	COLUMNS_LOOP: for j in 0..<COLUMNS {
 
-	    rl.DrawCircle ( 100, 10, 25, rl.RED )
+	    
+    
+	    rl.DrawCircle ( i32(100*j), i32(10*i), 25, rl.RED )
+	    
 	    when false {
 		rl.DrawRectangle(i32(sqboard[i][j].d.x), i32(sqboard[i][j].d.y), i32(sqboard[i][j].s.x), i32(sqboard[i][j].s.y), rl.Color{0x10*u8(i), 0x40*u8(j), 0x5, 200.0})
 	    } else {
@@ -110,6 +113,7 @@ render_square :: proc (sqboard : ^Board) {
 	}
 	flag = !flag
     }
+
 }
 
 
