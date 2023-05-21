@@ -1,0 +1,15 @@
+
+* Dama on Odin!
+
+just a game of dama made with Odin
+
+** demos
+
+
+
+** motivation
+
+
+* version of [[https://github.com/odin-lang/odin][Odin]]
+
+dev-2023-05:0c352213
