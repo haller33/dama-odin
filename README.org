@@ -5,7 +5,7 @@ just a game of dama made with Odin
 
 ** demos
 
-
+[[../demo/demo/presentation.png]]
 
 ** motivation
 
