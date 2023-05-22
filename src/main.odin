@@ -23,6 +23,8 @@ WIN_WITGH :: 600
 COLUMNS :: 8
 LINES :: 8
 
+RADIOUS_CIRCLE_MAX :: 30
+
 RAINBOW_ENABLE :: false
 
 Square :: struct {
@@ -35,6 +37,7 @@ Board :: [COLUMNS][LINES]Square
 CirclesPieces :: struct {
   point:      [MAX_NUMBER_PICES]n.float2,
   radious:    [MAX_NUMBER_PICES]f32,
+  color:      [MAX_NUMBER_PICES]rl.Color,
   playing:    [MAX_NUMBER_PICES]bool,
   moving:     [MAX_NUMBER_PICES]bool,
   mouse_over: [MAX_NUMBER_PICES]bool,
@@ -43,6 +46,12 @@ CirclesPieces :: struct {
 
 
 dama :: proc() {
+
+  set_all_to_not_dama :: proc(circle: ^CirclesPieces) {
+    for i in 0 ..< MAX_NUMBER_PICES {
+      circle^.dama[i] = false
+    }
+  }
 
   windown_dim :: n.int2{WIN_HIGHT, WIN_WITGH}
 
@@ -55,11 +64,13 @@ dama :: proc() {
 
   circles_pieces: CirclesPieces
 
+  set_all_to_not_dama(&circles_pieces)
+
   sq_board: Board
 
   initialize_square_board(&sq_board)
 
-  /// initialize_circles_possition(&circles_pieces, &sq_board)
+  initialize_circles_possition(&circles_pieces, &sq_board)
 
   for is_running && rl.WindowShouldClose() == false {
 
@@ -67,10 +78,9 @@ dama :: proc() {
 
     render_square_borard(&sq_board)
 
-    // rl.DrawCircle(WIN_HIGHT / 2.0,  WIN_WITGH / 2.0, 10, rl.RED)
-    initialize_circles_possition(&circles_pieces, &sq_board)
+    rl.DrawCircle(WIN_HIGHT / 2.0,  WIN_WITGH / 2.0, 1, rl.RED)
 
-    // render_circles_on_borard(&circles)
+    render_circles_on_borard(&circles_pieces)
 
     // rl.DrawText("Hello World!", 100, 100, 20, rl.DARKGRAY)
 
@@ -83,13 +93,17 @@ dama :: proc() {
 
 }
 
-render_circles_on_borard :: proc(sqboard: ^CirclesPieces) {
+render_circles_on_borard :: proc(circles: ^CirclesPieces) {
 
   for i in 0 ..< MAX_NUMBER_PICES {
 
-    fmt.print(i, " ")
+    rl.DrawCircle(
+      auto_cast circles.point[i].x,
+      auto_cast circles.point[i].y,
+      circles.radious[i],
+      circles.color[i],
+    )
   }
-  fmt.println("")
 }
 
 initialize_circles_possition :: proc(
@@ -97,45 +111,39 @@ initialize_circles_possition :: proc(
   sq_board: ^Board,
 ) {
 
-  sizex_t: f32 = WIN_HIGHT / 8.0 // * 0.5
-  sizey_t: f32 = WIN_WITGH / 8.0
-  offset: f32 = 0.05
+  flag: bool = false
+  color_flag: bool = true
 
-  line: f32 = 0.0
-  column: f32 = 0.0
-
-  when false {
-
-    LINES_LOOP: for i in 0 ..< MAX_NUMBER_PICES {
-
-      line = f32(i) * sizex_t
-
-    }
-  }
-
-  flag: bool = true
+  current_color: rl.Color
+  one_side :: rl.RED
+  other_side :: rl.WHITE
+  count_pieces_indx: u8 = 0
 
   LINES_LOOP: for i in 0 ..< LINES {
 
     COLUMNS_LOOP: for j in 0 ..< COLUMNS {
 
-      if !(i == 3) && !(i == 4) && !flag {
-        rl.DrawCircle(
-          auto_cast (sq_board[
-              i \
-            ][
-              j \
-            ].location.x +
-            (sq_board[j][i].size_ocuppy.x / 2)),
-          auto_cast (sq_board[
-              i \
-            ][
-              j \
-            ].location.y +
-            (sq_board[j][i].size_ocuppy.y / 2)),
-          30,
-          rl.RED,
-        )
+
+      if !(i == 3) && !(i == 4) && flag {
+
+        circles_pieces.color[count_pieces_indx] = current_color
+        circles_pieces.point[count_pieces_indx].x =
+          (sq_board[i][j].location.x + (sq_board[j][i].size_ocuppy.x / 2))
+        circles_pieces.point[count_pieces_indx].y =
+          (sq_board[i][j].location.y + (sq_board[j][i].size_ocuppy.y / 2))
+
+        circles_pieces.radious[count_pieces_indx] = RADIOUS_CIRCLE_MAX
+
+        count_pieces_indx += 1
+      }
+      if (i == 3) || (i == 4) {
+        color_flag = false
+      }
+
+      if color_flag {
+        current_color = one_side
+      } else {
+        current_color = other_side
       }
 
       flag = !flag
