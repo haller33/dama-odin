@@ -6,6 +6,7 @@ import "core:mem"
 import la "core:math/linalg"
 import n "core:math/linalg/hlsl"
 import rl "vendor:raylib"
+import math "core:math"
 import rand "core:math/rand"
 import "core:strings"
 
@@ -16,6 +17,9 @@ MAX_BOARD :: 64
 MAX_FRAME :: 60
 
 MAX_NUMBER_PICES :: 24
+
+NUMBERS_ON_CIRCLES :: true
+COLOR_NUMBERS_ON_CIRCLES :: rl.GRAY
 
 WIN_HIGHT :: 800
 WIN_WITGH :: 600
@@ -72,15 +76,29 @@ dama :: proc() {
 
   initialize_circles_possition(&circles_pieces, &sq_board)
 
+  mouse_now: rl.Vector2
+
+  click_now: bool = false
+
   for is_running && rl.WindowShouldClose() == false {
 
-    rl.ClearBackground(rl.WHITE)
+    mouse_now = rl.GetMousePosition()
+
+
+    rl.ClearBackground(rl.BLUE)
 
     render_square_borard(&sq_board)
 
-    rl.DrawCircle(WIN_HIGHT / 2.0,  WIN_WITGH / 2.0, 1, rl.RED)
+    rl.DrawCircle(WIN_HIGHT / 2.0, WIN_WITGH / 2.0, 1, rl.RED)
 
     render_circles_on_borard(&circles_pieces)
+
+    if (rl.IsKeyDown(rl.KeyboardKey.R)) {
+
+      initialize_circles_possition(&circles_pieces, &sq_board)
+    }
+
+    keyboard_logics(&click_now, &circles_pieces, auto_cast &mouse_now)
 
     // rl.DrawText("Hello World!", 100, 100, 20, rl.DARKGRAY)
 
@@ -93,16 +111,102 @@ dama :: proc() {
 
 }
 
+keyboard_logics :: proc(
+  click_now: ^bool,
+  circles_pieces: ^CirclesPieces,
+  mouse_now: ^rl.MouseButton,
+) {
+
+  if (!click_now^) {
+    detect_mouse_over(circles_pieces, auto_cast mouse_now)
+  }
+  if (rl.IsMouseButtonReleased(rl.MouseButton.LEFT)) {
+    click_now^ = false
+    deattach_mouse(circles_pieces)
+  }
+  if (!click_now^) {
+
+    click_now^ = rl.IsMouseButtonPressed(rl.MouseButton.LEFT)
+  }
+
+  if (click_now^) {
+
+    move_circle(circles_pieces, auto_cast mouse_now)
+  }
+}
+
+move_circle :: proc(circles: ^CirclesPieces, mouse_now: ^rl.Vector2) {
+
+  for i in 0 ..< MAX_NUMBER_PICES {
+    if (circles.mouse_over[i]) {
+      circles.point[i].x = mouse_now[0]
+      circles.point[i].y = mouse_now[1]
+    }
+  }
+}
+
+deattach_mouse :: proc(circles: ^CirclesPieces) {
+
+  LOOP: for i in 0 ..< MAX_NUMBER_PICES {
+    circles.mouse_over[i] = false
+  }
+}
+
+detect_mouse_over :: proc(circles: ^CirclesPieces, mouse_now: ^rl.Vector2) {
+
+  aready_over: bool = false
+  MOUSE_OVER_LOOP: for i in 0 ..< MAX_NUMBER_PICES {
+
+    // radios need to be small than distance to
+    // mouse been over
+    //
+
+    if (aready_over) {
+      break MOUSE_OVER_LOOP
+    }
+    distance := math.sqrt(
+      math.pow(mouse_now[0] - circles.point[i].x, 2) +
+      math.pow(mouse_now[1] - circles.point[i].y, 2),
+    )
+
+    if (distance < RADIOUS_CIRCLE_MAX) {
+      aready_over = true
+      circles.mouse_over[i] = true
+    } else {
+      circles.mouse_over[i] = false
+    }
+  }
+  // fmt.println(circles.mouse_over)
+}
+
 render_circles_on_borard :: proc(circles: ^CirclesPieces) {
 
   for i in 0 ..< MAX_NUMBER_PICES {
 
-    rl.DrawCircle(
-      auto_cast circles.point[i].x,
-      auto_cast circles.point[i].y,
-      circles.radious[i],
-      circles.color[i],
-    )
+    if (circles.playing[i]) {
+      rl.DrawCircle(
+        auto_cast circles.point[i].x,
+        auto_cast circles.point[i].y,
+        circles.radious[i],
+        circles.color[i],
+      )
+    }
+
+    when NUMBERS_ON_CIRCLES {
+
+      scores: cstring = strings.clone_to_cstring(
+        fmt.tprintf("%v", i),
+        context.temp_allocator,
+      )
+
+      rl.DrawText(
+        scores,
+        auto_cast circles.point[i].x,
+        auto_cast circles.point[i].y,
+        20,
+        COLOR_NUMBERS_ON_CIRCLES,
+      )
+    }
   }
 }
 
@@ -133,6 +237,7 @@ initialize_circles_possition :: proc(
           (sq_board[i][j].location.y + (sq_board[j][i].size_ocuppy.y / 2))
 
         circles_pieces.radious[count_pieces_indx] = RADIOUS_CIRCLE_MAX
+        circles_pieces.playing[count_pieces_indx] = true
 
         count_pieces_indx += 1
       }
