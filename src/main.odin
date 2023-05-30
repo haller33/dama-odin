@@ -15,11 +15,14 @@ SHOW_LEAK :: true
 
 MAX_BOARD :: 64
 MAX_FRAME :: 60
+MAX_SQUARES_ONE_COLOR :: MAX_BOARD / 2
 
 MAX_NUMBER_PICES :: 24
 
 NUMBERS_ON_CIRCLES :: true
+DEBUG_INTERFACE :: true
 COLOR_NUMBERS_ON_CIRCLES :: rl.GRAY
+COLOR_DEBUG_LINES :: rl.GREEN
 
 WIN_HIGHT :: 800
 WIN_WITGH :: 600
@@ -36,7 +39,12 @@ Square :: struct {
   size_ocuppy: n.float2,
 }
 
+
 Board :: [COLUMNS][LINES]Square
+
+Square_possition :: struct {
+  possition: [MAX_SQUARES_ONE_COLOR]n.float2,
+}
 
 CirclesPieces :: struct {
   point:      [MAX_NUMBER_PICES]n.float2,
@@ -64,6 +72,8 @@ dama :: proc() {
 
   is_running: bool = true
 
+  black_squares: Square_possition
+
   rl.BeginDrawing()
 
   circles_pieces: CirclesPieces
@@ -74,13 +84,13 @@ dama :: proc() {
 
   initialize_square_board(&sq_board)
 
-  initialize_circles_possition(&circles_pieces, &sq_board)
+  initialize_circles_possition(&circles_pieces, &sq_board, &black_squares)
 
   mouse_now: rl.Vector2
 
   click_now: bool = false
 
-  for is_running && rl.WindowShouldClose() == false {
+  for is_running && (rl.WindowShouldClose() == false) {
 
     mouse_now = rl.GetMousePosition()
 
@@ -95,7 +105,7 @@ dama :: proc() {
 
     if (rl.IsKeyDown(rl.KeyboardKey.R)) {
 
-      initialize_circles_possition(&circles_pieces, &sq_board)
+      initialize_circles_possition(&circles_pieces, &sq_board, &black_squares)
     }
 
     keyboard_logics(&click_now, &circles_pieces, auto_cast &mouse_now)
@@ -108,7 +118,6 @@ dama :: proc() {
 
     rl.EndDrawing()
   }
-
 }
 
 keyboard_logics :: proc(
@@ -122,6 +131,7 @@ keyboard_logics :: proc(
   }
   if (rl.IsMouseButtonReleased(rl.MouseButton.LEFT)) {
     click_now^ = false
+    realine_circle_moved(circles_pieces)
     deattach_mouse(circles_pieces)
   }
   if (!click_now^) {
@@ -131,7 +141,10 @@ keyboard_logics :: proc(
 
   if (click_now^) {
 
+    // fmt.println("moving")
     move_circle(circles_pieces, auto_cast mouse_now)
+
+    render_moving_most_of_circles(circles_pieces)
   }
 }
 
@@ -164,6 +177,18 @@ detect_mouse_over :: proc(circles: ^CirclesPieces, mouse_now: ^rl.Vector2) {
     if (aready_over) {
       break MOUSE_OVER_LOOP
     }
+
+    when DEBUG_INTERFACE {
+
+      rl.DrawLine(
+        auto_cast circles.point[i].x,
+        auto_cast circles.point[i].y,
+        auto_cast mouse_now[0],
+        auto_cast mouse_now[1],
+        COLOR_DEBUG_LINES,
+      )
+    }
+
     distance := math.sqrt(
       math.pow(mouse_now[0] - circles.point[i].x, 2) +
       math.pow(mouse_now[1] - circles.point[i].y, 2),
@@ -177,6 +202,25 @@ detect_mouse_over :: proc(circles: ^CirclesPieces, mouse_now: ^rl.Vector2) {
     }
   }
   // fmt.println(circles.mouse_over)
+}
+
+
+/// sees to not working...
+render_moving_most_of_circles :: proc(circles: ^CirclesPieces) {
+
+  for i in 0 ..< MAX_NUMBER_PICES {
+
+    if (circles.playing[i]) {
+      if (circles.moving[i]) {
+        rl.DrawCircle(
+          auto_cast circles.point[i].x,
+          auto_cast circles.point[i].y,
+          circles.radious[i],
+          circles.color[i],
+        )
+      }
+    }
+  }
 }
 
 render_circles_on_borard :: proc(circles: ^CirclesPieces) {
@@ -210,9 +254,30 @@ render_circles_on_borard :: proc(circles: ^CirclesPieces) {
   }
 }
 
+realine_circle_moved :: proc(circles: ^CirclesPieces) {
+
+  moused_mouse_idx: byte = 255
+
+  MOUSE_OVER_LOOP: for i in 0 ..< MAX_NUMBER_PICES {
+
+    if circles.moving[i] {
+      moused_mouse_idx = cast(byte)i
+    }
+  }
+
+  assert(moused_mouse_idx < 255)
+
+  /*
+    distance := math.sqrt(
+      math.pow(mouse_now[0] - circles.point[i].x, 2) +
+      math.pow(mouse_now[1] - circles.point[i].y, 2),
+    ) */
+}
+
 initialize_circles_possition :: proc(
   circles_pieces: ^CirclesPieces,
   sq_board: ^Board,
+  square: ^Square_possition,
 ) {
 
   flag: bool = false
@@ -227,6 +292,23 @@ initialize_circles_possition :: proc(
 
     COLUMNS_LOOP: for j in 0 ..< COLUMNS {
 
+      if flag {
+        square.possition[i].x =
+          (sq_board[i][j].location.x + (sq_board[j][i].size_ocuppy.x / 2))
+        square.possition[i].y =
+          (sq_board[i][j].location.y + (sq_board[j][i].size_ocuppy.y / 2))
+
+        when DEBUG_INTERFACE {
+
+          rl.DrawRectangle(
+            auto_cast square.possition[i].x - 3,
+            auto_cast square.possition[i].y - 2,
+            7,
+            5,
+            rl.ORANGE,
+          )
+        }
+      }
 
       if !(i == 3) && !(i == 4) && flag {
 
@@ -244,6 +326,7 @@ initialize_circles_possition :: proc(
       if (i == 3) || (i == 4) {
         color_flag = false
       }
+
 
       if color_flag {
         current_color = one_side
