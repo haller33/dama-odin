@@ -11,26 +11,36 @@ import rand "core:math/rand"
 import "core:strings"
 
 TEST_MODE :: false
-SHOW_LEAK :: true
+SHOW_LEAK :: false
 
-MAX_BOARD :: 64
+MAX_SIDE :: 8
+MAX_BOARD :: (MAX_SIDE * MAX_SIDE)
 MAX_FRAME :: 60
 MAX_SQUARES_ONE_COLOR :: (MAX_BOARD / 2)
 
-MAX_NUMBER_PICES :: 24
 
-NUMBERS_ON_CIRCLES :: false
-DEBUG_INTERFACE :: true
-DEBUG_MOVING_PIECES :: true
+COLUMNS :: MAX_SIDE
+LINES :: MAX_SIDE
+
+MAX_NUMBER_PICES :: (MAX_BOARD / 2) - 8
+
+TRUE_DEBUG :: true
+NOT_DISPLAY_NUMBERS_WHEN_NOT_PLAYING :: true
+NOT_GO_DEEP_ON_DETECTING_MOUSE_OVER :: true
+NUMBERS_ON_CIRCLES :: false || TRUE_DEBUG
+DEBUG_INTERFACE :: false || TRUE_DEBUG
+DEBUG_MOVING_PIECES :: false || TRUE_DEBUG
+DEBUG_DETECT_OVER :: DEBUG_INTERFACE || DEBUG_MOVING_PIECES
 COLOR_NUMBERS_ON_CIRCLES :: rl.GRAY
 COLOR_DEBUG_LINES :: rl.GREEN
 COLOR_DEBUG_LINES_GRID :: rl.YELLOW
 
+PLAYER_ONE :: true
+PLAYER_TWO :: false
+
 WIN_HIGHT :: 800
 WIN_WITGH :: 600
 
-COLUMNS :: 8
-LINES :: 8
 
 RADIOUS_CIRCLE_MAX :: 30
 
@@ -52,10 +62,12 @@ CirclesPieces :: struct {
   point:                [MAX_NUMBER_PICES]n.float2,
   radious:              [MAX_NUMBER_PICES]f32,
   color:                [MAX_NUMBER_PICES]rl.Color,
-  playing:              [MAX_NUMBER_PICES]bool,
+  playing_piece:        [MAX_NUMBER_PICES]bool,
   moving:               [MAX_NUMBER_PICES]bool,
   mouse_over:           [MAX_NUMBER_PICES]bool,
   dama:                 [MAX_NUMBER_PICES]bool,
+  side:                 [MAX_NUMBER_PICES]bool,
+  current_player:       bool,
   possition_mouse_over: n.float2,
 }
 
@@ -89,6 +101,8 @@ dama :: proc() {
 
   initialize_circles_possition(&circles_pieces, &sq_board, &black_squares)
 
+  circles_pieces.current_player = PLAYER_ONE
+
   mouse_now: rl.Vector2
 
   click_now: bool = false
@@ -107,6 +121,7 @@ dama :: proc() {
     render_circles_on_borard(&circles_pieces)
 
     if (rl.IsKeyDown(rl.KeyboardKey.R)) {
+
 
       initialize_circles_possition(&circles_pieces, &sq_board, &black_squares)
     }
@@ -135,15 +150,25 @@ keyboard_logics :: proc(
   square: ^Square_possition,
 ) {
 
-  if (!click_now^) {
+  if !click_now^ {
     detect_mouse_over(circles_pieces, auto_cast mouse_now)
   }
-  if (rl.IsMouseButtonReleased(rl.MouseButton.LEFT)) {
-    realine_circle_moved(circles_pieces, square)
+  if rl.IsMouseButtonReleased(rl.MouseButton.LEFT) {
     click_now^ = false
+
+
+    realine_circle_moved(circles_pieces, square)
+    circles_pieces.current_player = !circles_pieces.current_player
+
     deattach_mouse(circles_pieces)
   }
-  if (!click_now^) {
+  when DEBUG_MOVING_PIECES && DEBUG_INTERFACE {
+    if (rl.IsMouseButtonPressed(rl.MouseButton.RIGHT)) {
+      remove_playng_piece_mouse_over(circles_pieces)
+    }
+  }
+
+  if !click_now^ {
 
     click_now^ = rl.IsMouseButtonPressed(rl.MouseButton.LEFT)
     when DEBUG_MOVING_PIECES {
@@ -151,22 +176,53 @@ keyboard_logics :: proc(
     }
   }
 
-  if (click_now^) {
+  if click_now^ {
 
-    // fmt.println("moving")
-    move_circle(circles_pieces, auto_cast mouse_now)
+    if is_correct_piece(circles_pieces) {
 
-    render_moving_most_of_circles(circles_pieces)
+      move_circle(circles_pieces, auto_cast mouse_now)
+
+    }
+    // render_moving_most_of_circles(circles_pieces)
   }
+}
+
+remove_playng_piece_mouse_over :: proc(circles: ^CirclesPieces) {
+
+  DEATACH_PIECE: for i in 0 ..< MAX_NUMBER_PICES {
+    if circles.mouse_over[i] {
+      circles.playing_piece[i] = !circles.playing_piece[i]
+    }
+  }
+}
+
+is_correct_piece :: proc(circles: ^CirclesPieces) -> (ret: bool) {
+  ret = false
+  CORRECT_CIRCLE: for i in 0 ..< MAX_NUMBER_PICES {
+      if circles.mouse_over[i] && circles.playing_piece[i] {
+      if circles.current_player == circles.side[i] {
+        ret = true
+      }
+      break CORRECT_CIRCLE
+    }
+  }
+  return
 }
 
 move_circle :: proc(circles: ^CirclesPieces, mouse_now: ^rl.Vector2) {
 
   for i in 0 ..< MAX_NUMBER_PICES {
-    if (circles.mouse_over[i]) {
+    if circles.mouse_over[
+         i \
+       ] &&
+       circles.playing_piece[i] &&
+       circles.current_player == circles.side[i] {
       circles.point[i].x = mouse_now[0]
       circles.point[i].y = mouse_now[1]
     }
+  }
+  when DEBUG_MOVING_PIECES {
+    fmt.println(circles.current_player)
   }
 }
 
@@ -190,7 +246,7 @@ detect_mouse_over :: proc(circles: ^CirclesPieces, mouse_now: ^rl.Vector2) {
       break MOUSE_OVER_LOOP
     }
 
-    when DEBUG_INTERFACE {
+    when DEBUG_DETECT_OVER {
 
       rl.DrawLine(
         auto_cast circles.point[i].x,
@@ -201,19 +257,23 @@ detect_mouse_over :: proc(circles: ^CirclesPieces, mouse_now: ^rl.Vector2) {
       )
     }
 
-    distance := math.sqrt(
-      math.pow(mouse_now[0] - circles.point[i].x, 2) +
-      math.pow(mouse_now[1] - circles.point[i].y, 2),
-    )
+    if circles.side[i] == circles.current_player && circles.playing_piece[i] {
+      distance := math.sqrt(
+        math.pow(mouse_now[0] - circles.point[i].x, 2) +
+        math.pow(mouse_now[1] - circles.point[i].y, 2),
+      )
 
-    if (distance < RADIOUS_CIRCLE_MAX) {
-      circles.possition_mouse_over.x = circles.point[i].x
-      circles.possition_mouse_over.y = circles.point[i].y
+      if (distance < RADIOUS_CIRCLE_MAX) {
+        circles.possition_mouse_over.x = circles.point[i].x
+        circles.possition_mouse_over.y = circles.point[i].y
 
-      aready_over = true
-      circles.mouse_over[i] = true
-    } else {
-      circles.mouse_over[i] = false
+        when NOT_GO_DEEP_ON_DETECTING_MOUSE_OVER {
+          aready_over = true
+        }
+        circles.mouse_over[i] = true
+      } else {
+        circles.mouse_over[i] = false
+      }
     }
   }
   // fmt.println(circles.mouse_over)
@@ -225,15 +285,13 @@ render_moving_most_of_circles :: proc(circles: ^CirclesPieces) {
 
   for i in 0 ..< MAX_NUMBER_PICES {
 
-    if (circles.playing[i]) {
-      if (circles.moving[i]) {
-        rl.DrawCircle(
-          auto_cast circles.point[i].x,
-          auto_cast circles.point[i].y,
-          circles.radious[i],
-          circles.color[i],
-        )
-      }
+    if circles.playing_piece[i] && circles.moving[i] {
+      rl.DrawCircle(
+        auto_cast circles.point[i].x,
+        auto_cast circles.point[i].y,
+        circles.radious[i],
+        circles.color[i],
+      )
     }
   }
 }
@@ -242,7 +300,7 @@ render_circles_on_borard :: proc(circles: ^CirclesPieces) {
 
   for i in 0 ..< MAX_NUMBER_PICES {
 
-    if (circles.playing[i]) {
+    if (circles.playing_piece[i]) {
       rl.DrawCircle(
         auto_cast circles.point[i].x,
         auto_cast circles.point[i].y,
@@ -253,18 +311,27 @@ render_circles_on_borard :: proc(circles: ^CirclesPieces) {
 
     when NUMBERS_ON_CIRCLES {
 
-      scores: cstring = strings.clone_to_cstring(
-        fmt.tprintf("%v", i),
-        context.temp_allocator,
-      )
+      display_digits: bool = true
 
-      rl.DrawText(
-        scores,
-        auto_cast circles.point[i].x,
-        auto_cast circles.point[i].y,
-        20,
-        COLOR_NUMBERS_ON_CIRCLES,
-      )
+      when NOT_DISPLAY_NUMBERS_WHEN_NOT_PLAYING {
+        if !circles.playing_piece[i] {
+          display_digits = false
+        }
+      }
+      if display_digits {
+        scores: cstring = strings.clone_to_cstring(
+          fmt.tprintf("%v", i),
+          context.temp_allocator,
+        )
+
+        rl.DrawText(
+          scores,
+          auto_cast circles.point[i].x,
+          auto_cast circles.point[i].y,
+          20,
+          COLOR_NUMBERS_ON_CIRCLES,
+        )
+      }
     }
   }
 }
@@ -290,23 +357,16 @@ realine_circle_moved :: proc(
 
   // assert(moused_mouse_idx < MAX_SQUARES_ONE_COLOR)
 
-  if moused_mouse_idx < MAX_SQUARES_ONE_COLOR {
+  if moused_mouse_idx < MAX_SQUARES_ONE_COLOR &&
+     circles.current_player == circles.side[moused_mouse_idx] {
     distance: f32
-    min_distance: f32 = 64 * 64
+    min_distance: f32 = MAX_BOARD
     last_min_square: n.float2
     idx_square: byte
 
     BOARD_COLOR_LOOP: for i in 0 ..< 32 {
 
       // fmt.println(squares.possition[i], " ")
-
-      rl.DrawCircle(
-        auto_cast squares.possition[i].x - 3,
-        auto_cast squares.possition[i].y - 2,
-        4,
-        rl.ORANGE,
-      )
-
 
       distance := math.sqrt(
         math.pow(
@@ -320,6 +380,13 @@ realine_circle_moved :: proc(
       )
 
       when DEBUG_INTERFACE {
+
+        rl.DrawCircle(
+          auto_cast squares.possition[i].x - 3,
+          auto_cast squares.possition[i].y - 2,
+          4,
+          rl.ORANGE,
+        )
 
         distance_literal: cstring = strings.clone_to_cstring(
           fmt.tprintf("%v", cast(int)distance),
@@ -367,11 +434,15 @@ realine_circle_moved :: proc(
     fmt.println("circles.point ", circles.point[moused_mouse_idx])
     fmt.println("idx_square", idx_square)
     fmt.println(MAX_SQUARES_ONE_COLOR) */
-    fmt.println("min_distance", min_distance)
+    // fmt.println("min_distance", min_distance)
 
 
-    circles.point[moused_mouse_idx].x = last_min_square.x
-    circles.point[moused_mouse_idx].y = last_min_square.y
+    if circles.playing_piece[moused_mouse_idx] {
+
+
+      circles.point[moused_mouse_idx].x = last_min_square.x
+      circles.point[moused_mouse_idx].y = last_min_square.y
+    }
 
   }
   /*
@@ -429,7 +500,14 @@ initialize_circles_possition :: proc(
           (sq_board[i][j].location.y + (sq_board[j][i].size_ocuppy.y / 2))
 
         circles_pieces.radious[count_pieces_indx] = RADIOUS_CIRCLE_MAX
-        circles_pieces.playing[count_pieces_indx] = true
+        circles_pieces.playing_piece[count_pieces_indx] = true
+        circles_pieces.mouse_over[count_pieces_indx] = false
+
+        if color_flag {
+          circles_pieces.side[count_pieces_indx] = PLAYER_ONE
+        } else {
+          circles_pieces.side[count_pieces_indx] = PLAYER_TWO
+        }
 
         count_pieces_indx += 1
       }
@@ -450,6 +528,7 @@ initialize_circles_possition :: proc(
 
     flag = !flag
   }
+  circles_pieces.current_player = PLAYER_ONE
 }
 
 initialize_square_board :: proc(sqboard: ^Board) {
@@ -463,7 +542,7 @@ initialize_square_board :: proc(sqboard: ^Board) {
 
   COLUMNS_LOOP: for i in 0 ..< LINES {
 
-    line = f32(i) * sizex_t // + 10
+    line = f32(i) * sizex_t
 
     LINES_LOOP: for j in 0 ..< COLUMNS {
 
@@ -516,7 +595,6 @@ render_square_borard :: proc(sqboard: ^Board) {
     }
     flag = !flag
   }
-
 }
 
 
