@@ -158,7 +158,9 @@ keyboard_logics :: proc(
 
 
     realine_circle_moved(circles_pieces, square)
-    circles_pieces.current_player = !circles_pieces.current_player
+    if is_correct_piece(circles_pieces) {
+      circles_pieces.current_player = !circles_pieces.current_player
+    }
 
     deattach_mouse(circles_pieces)
   }
@@ -192,6 +194,9 @@ remove_playng_piece_mouse_over :: proc(circles: ^CirclesPieces) {
   DEATACH_PIECE: for i in 0 ..< MAX_NUMBER_PICES {
     if circles.mouse_over[i] {
       circles.playing_piece[i] = !circles.playing_piece[i]
+      circles.point[i].x = (circles.radious[i] + 5) * -1
+      circles.point[i].y = (circles.radious[i] + 5) * -1
+
     }
   }
 }
@@ -199,7 +204,7 @@ remove_playng_piece_mouse_over :: proc(circles: ^CirclesPieces) {
 is_correct_piece :: proc(circles: ^CirclesPieces) -> (ret: bool) {
   ret = false
   CORRECT_CIRCLE: for i in 0 ..< MAX_NUMBER_PICES {
-      if circles.mouse_over[i] && circles.playing_piece[i] {
+    if circles.mouse_over[i] && circles.playing_piece[i] {
       if circles.current_player == circles.side[i] {
         ret = true
       }
